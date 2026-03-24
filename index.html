@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRITZ!Box Export Checksum Fixer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .code-block {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: 'Fira Code', monospace;
+            overflow-x: auto;
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans leading-normal">
+
+    <div class="max-w-4xl mx-auto py-12 px-4">
+        <!-- Header Section -->
+        <header class="mb-12 border-b border-gray-200 pb-8">
+            <h1 class="text-4xl font-extrabold text-blue-700 mb-2">FRITZ!Box Export Checksum Fixer</h1>
+            <p class="text-xl text-gray-600">Ein leichtgewichtiges Tool zur Korrektur von CRC32-Prüfsummen in Konfigurationsdateien.</p>
+        </header>
+
+        <!-- UI / Tool Section -->
+        <section class="bg-white shadow-lg rounded-xl p-8 mb-12 border border-blue-100">
+            <h2 class="text-2xl font-bold mb-6 flex items-center">
+                <span class="bg-blue-600 text-white p-2 rounded-lg mr-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                </span>
+                Tool: Datei jetzt reparieren
+            </h2>
+            
+            <div class="flex flex-col sm:flex-row gap-4 items-center">
+                <input type="file" id="fileInput" accept=".export" 
+                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                
+                <button id="runBtn" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-8 rounded-full transition duration-200 ease-in-out shadow-md hover:shadow-lg disabled:opacity-50 text-nowrap">
+                    Fix & Download
+                </button>
+            </div>
+
+            <div id="status" class="mt-6 hidden p-4 rounded-lg">
+                <!-- Status wird hier eingefügt -->
+            </div>
+        </section>
+
+        <!-- Documentation Section -->
+        <article class="prose prose-blue max-w-none">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 border-b pb-4">
+                <h2 class="text-3xl font-bold !m-0">Dokumentation</h2>
+                <button id="copyMdBtn" class="inline-flex items-center px-4 py-2 bg-gray-800 hover:bg-black text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                    </svg>
+                    README.md kopieren
+                </button>
+            </div>
+            
+            <h3 class="text-xl font-semibold mt-8 mb-4">🛠 Was macht dieses Tool?</h3>
+            <p class="mb-4">
+                Wenn du eine FRITZ!Box-Sicherungsdatei manuell bearbeitest (z. B. um versteckte Einstellungen zu ändern), stimmt die am Ende der Datei gespeicherte Prüfsumme nicht mehr mit dem Inhalt überein. Die FRITZ!Box wird die Datei beim Wiederherstellen als "korrupt" ablehnen.
+            </p>
+            <ul class="list-disc pl-6 mb-4 space-y-1">
+                <li>Scannt die Datei nach relevanten Sektionen (<code>BINFILE</code>, <code>B64FILE</code>, <code>CFGFILE</code>).</li>
+                <li>Berechnet die CRC32-Prüfsumme nach dem spezifischen AVM-Verfahren neu.</li>
+                <li>Ersetzt die alte Checksumme am Ende der Datei (<code>**** END OF EXPORT ... ****</code>).</li>
+            </ul>
+
+            <h3 class="text-xl font-semibold mt-8 mb-4">🚀 Nutzung in Node.js</h3>
+            <p class="mb-2">Kopiere diesen Code in eine Datei (z.B. <code>fix.js</code>), um das Tool in Node.js zu verwenden:</p>
+            <div class="relative group mt-4">
+                <div class="code-block text-sm" id="nodeCode">
+<pre>const fs = require("fs");
+const FritzExportChecksum = require("./fritz-export-checksum.js");
+
+function fixExportFile(inputPath, outputPath = inputPath + ".fixed") {
+  const bytes = new Uint8Array(fs.readFileSync(inputPath));
+  const checker = FritzExportChecksum.fromBytes(bytes);
+  const result = checker.replaceChecksumAsBytes();
+
+  fs.writeFileSync(outputPath, Buffer.from(result.updatedBytes));
+
+  console.log("Alte Prüfsumme:", result.oldCrc);
+  console.log("Neue Prüfsumme:", result.newCrc);
+  console.log("Gespeichert als:", outputPath);
+}
+
+fixExportFile("./Einstellungen.export");</pre>
+                </div>
+                <button onclick="copyCode('nodeCode')" class="copy-btn">Kopieren</button>
+            </div>
+
+            <h3 class="text-xl font-semibold mt-8 mb-4">📂 Projektstruktur</h3>
+            <p>Das Modul ist als <strong>UMD (Universal Module Definition)</strong> aufgebaut und läuft ohne Änderungen sowohl in Node.js Umgebungen als auch direkt im Browser.</p>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-8">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-yellow-700 font-bold">Wichtiger Hinweis</p>
+                        <p class="text-sm text-yellow-700">
+                            Das Ändern von Konfigurationsdateien geschieht auf eigene Gefahr. Fehlerhafte Einstellungen können dazu führen, dass die FRITZ!Box nicht mehr korrekt startet. Erstelle immer eine Sicherheitskopie!
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </article>
+    </div>
+
+    <script src="./fritz-export-checksum.js"></script>
+    <script>
+        // Der README-Markdown-Inhalt
+        const README_CONTENT = `# FRITZ!Box Export Checksum Fixer
+
+Ein leichtgewichtiges JavaScript-Tool (Node.js & Browser), um die Prüfsumme (CRC32) von FRITZ!Box-Konfigurationsdateien (\`.export\`) nach manuellen Änderungen zu korrigieren.
+
+## 🛠 Was macht dieses Tool?
+Wenn du eine FRITZ!Box-Sicherungsdatei manuell bearbeitest (z. B. um versteckte Einstellungen zu ändern), stimmt die am Ende der Datei gespeicherte Prüfsumme nicht mehr mit dem Inhalt überein. Die FRITZ!Box wird die Datei beim Wiederherstellen als "korrupt" ablehnen. 
+
+Dieses Tool:
+1. Scannt die Datei nach den relevanten Sektionen (\`BINFILE\`, \`B64FILE\`, \`CFGFILE\`).
+2. Berechnet die CRC32-Prüfsumme nach dem spezifischen AVM-Verfahren neu.
+3. Ersetzt die alte Checksumme am Ende der Datei (\`**** END OF EXPORT ... ****\`).
+
+---
+
+## 🚀 Nutzung
+
+### 1. In Node.js
+Du kannst das Skript ganz einfach in dein Node.js-Projekt einbinden.
+
+\`\`\`javascript
+const fs = require("fs");
+const FritzExportChecksum = require("./fritz-export-checksum.js");
+
+function fixExportFile(inputPath, outputPath = inputPath + ".fixed") {
+  const bytes = new Uint8Array(fs.readFileSync(inputPath));
+  const checker = FritzExportChecksum.fromBytes(bytes);
+  const result = checker.replaceChecksumAsBytes();
+
+  fs.writeFileSync(outputPath, Buffer.from(result.updatedBytes));
+
+  console.log("✅ Erfolg!");
+  console.log("Alte Prüfsumme:", result.oldCrc);
+  console.log("Neue Prüfsumme:", result.newCrc);
+}
+
+fixExportFile("./Einstellungen.export");
+\`\`\`
+
+### 2. Im Browser
+Nutze die beiliegende \`index.html\`, um Dateien direkt im Browser zu reparieren.
+
+## 📂 Projektstruktur
+* \`fritz-export-checksum.js\`: Die Kern-Logik als UMD-Modul.
+* \`index.html\`: Grafische Oberfläche.
+
+## ⚠️ Wichtiger Hinweis
+Das Ändern von Konfigurationsdateien geschieht auf eigene Gefahr. Fehlerhafte Einstellungen können dazu führen, dass die FRITZ!Box nicht mehr korrekt startet. Erstelle immer eine Sicherheitskopie!`;
+
+        /**
+         * Hilfsfunktion zum Kopieren von Code
+         */
+        function copyCode(elementId) {
+            const code = document.getElementById(elementId).innerText;
+            _copyToClipboard(code, event.target);
+        }
+
+        function _copyToClipboard(text, btnElement) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                const originalText = btnElement.innerText;
+                const originalHtml = btnElement.innerHTML;
+                
+                btnElement.innerText = "Kopiert!";
+                setTimeout(() => {
+                    btnElement.innerHTML = originalHtml;
+                }, 2000);
+            } catch (err) {
+                console.error('Fehler beim Kopieren', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // Event Listener für README-Kopie
+        document.getElementById('copyMdBtn').addEventListener('click', (e) => {
+            _copyToClipboard(README_CONTENT, e.currentTarget);
+        });
+
+
+        /**
+         * UI Logic
+         */
+        const fileInput = document.getElementById("fileInput");
+        const runBtn = document.getElementById("runBtn");
+        const status = document.getElementById("status");
+
+        runBtn.addEventListener("click", async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                showStatus("Bitte wähle zuerst eine Datei aus.", "error");
+                return;
+            }
+
+            try {
+                const buffer = await file.arrayBuffer();
+                const checker = FritzExportChecksum.fromBytes(new Uint8Array(buffer));
+                const result = checker.replaceChecksumAsBytes();
+
+                showStatus(`Erfolg! Alte Checksumme: ${result.oldCrc} | Neue Checksumme: ${result.newCrc}`, "success");
+
+                const blob = new Blob([result.updatedBytes], { type: "application/octet-stream" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = file.name.replace(".export", "") + ".fixed.export";
+                a.click();
+            } catch (err) {
+                showStatus("Fehler: " + err.message, "error");
+            }
+        });
+
+        function showStatus(msg, type) {
+            status.textContent = msg;
+            status.classList.remove("hidden", "bg-green-100", "text-green-800", "bg-red-100", "text-red-800");
+            if (type === "success") {
+                status.classList.add("bg-green-100", "text-green-800");
+            } else {
+                status.classList.add("bg-red-100", "text-red-800");
+            }
+        }
+    </script>
+</body>
+</html>
